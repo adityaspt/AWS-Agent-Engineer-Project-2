@@ -37,7 +37,7 @@ from bedrock_agentcore.tools.code_interpreter_client import code_session
 from strands_tools.browser import AgentCoreBrowser
 
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CSAI_Agent")
 
 # ── TODO 1 — App Initialisation ───────────────────────────────────────────────
@@ -52,7 +52,7 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 # Fill these in with the values you collected during infrastructure setup
 # (phase2_outputs.json / the AWS console), before your first deploy.
 GATEWAY_URL = "https://customersupportgateway-yqfybu12lj.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp"
-KB_ID       = "E0D7XTWQUH"          # 10-character Knowledge Base ID
+KB_ID       = "E0D7XTWQUH"
 REGION      = "us-east-1"
 MEMORY_ID   = "CustomerSupportMemory-ejQHij3w65"
 
@@ -355,8 +355,19 @@ async def invoke(payload, context=None):
         gateway_client = MCPClient(lambda: streamable_http_client(GATEWAY_URL))
 
         with gateway_client:
-            gateway_tools = gateway_client.list_tools_sync()
-            tools.extend(gateway_tools)
+            try:
+                gateway_tools = gateway_client.list_tools_sync()
+                tools.extend(gateway_tools)
+                logger.info(
+                    "Gateway connected successfully. Loaded %d tools.",
+                    len(gateway_tools),
+                )
+            except TimeoutError:
+                logger.exception("Gateway tool loading timed out")
+            except ConnectionError:
+                logger.exception("Gateway connection failed")
+            except Exception as exc:
+                logger.exception("Gateway tool loading failed: %s", exc)
 
             agent = Agent(
                 model=model,
